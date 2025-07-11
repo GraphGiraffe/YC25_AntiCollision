@@ -18,7 +18,7 @@ import re
 from pathlib import Path
 from typing import List
 
-from routing_utils import detect_planets  # наша «подсказка» из алиасов
+from routing_utils import detect_objects  # наша «подсказка» из алиасов
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  Основная точка входа стадии 6
@@ -27,6 +27,7 @@ def route_query(
     query: str,
     index_dir: Path,
     fallback_all: bool = True,
+    verbose: bool = False,
 ) -> List[Path]:
     """
     Decide which *.faiss index files to use for *query*.
@@ -46,7 +47,7 @@ def route_query(
     List[Path]
         Ordered list of FAISS index files to search.
     """
-    matched_slugs = detect_planets(query)
+    matched_slugs = detect_objects(query)
     if matched_slugs:
         idx_paths = [
             index_dir / f"{slug}.faiss" for slug in matched_slugs if (index_dir / f"{slug}.faiss").exists()

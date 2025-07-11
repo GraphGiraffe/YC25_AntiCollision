@@ -10,10 +10,26 @@ from query_router import route_query
 
 index_dir = Path("./wiki/faiss")  # где лежат индексы (stage 5)
 
-from query_utils import questions
+if __name__ == "__main__":
+    import argparse
 
-for q in questions:
-    selected = route_query(q, index_dir)
-    print(f"\nЗапрос: {q}")
-    print("Будем искать в:", *selected, sep="\n  • ")
-    print("-----")
+    parser = argparse.ArgumentParser(description="Test the OSS-RAG pipeline (stages 6-10)")
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        dest="verbose",
+        action = 'append_const',
+        const = 1,
+        help="Enable verbose output (tqdm progress bars and debug info)",
+    )
+
+    args = parser.parse_args()
+    
+    from text_dicts import questions
+
+    for q in questions:
+        
+        selected = route_query(q, index_dir, verbose=args.verbose)
+        print(f"\nЗапрос: {q}")
+        print("Будем искать в:", *selected, sep="\n  • ")
+        print("-----")

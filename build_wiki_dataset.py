@@ -61,22 +61,16 @@ from raw_collection import fetch_wikitext
 from parsing_cleaning import parse_wikitext
 from chunking import split_into_sections, chunk_section, Chunk
 from table_serialisation import extract_tables, serialise_table_row
+from text_dicts import PLANETS, SOLAR_SYSTEM_PAGES
 # ---------------------------------------------------------------------------
 #  Configuration
 # ---------------------------------------------------------------------------
 
-PLANETS = [
-    ["Mercury", "Mercury (planet)"],
-    ["Venus", "Venus"],
-    ["Earth", "Earth"],
-    ["Mars", "Mars"],
-    ["Jupiter", "Jupiter"],
-    ["Saturn", "Saturn"],
-    ["Uranus", "Uranus"],
-    ["Neptune", "Neptune"],
-]
 
-DEFAULT_EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"  # 1024-d open model
+
+# EMBED_MODEL = "BAAI/bge-large-en-v1.5"  # 1024-d open model
+EMBED_MODEL = "BAAI/bge-base-en-v1.5"  # 768-d open model
+
 TOKENS_PER_CHUNK = 300
 TOKEN_OVERLAP = 50
 
@@ -86,9 +80,9 @@ TOKEN_OVERLAP = 50
 ###############################################################################
 
 
-def stage1_collect_raw(out_dir: Path, title_url_list: Iterable[List[str, str]] = PLANETS) -> None:
+def stage1_collect_raw(out_dir: Path, title_url_list: Iterable[List[str, str]] = PLANETS, verbose: bool = True) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    for title, url in tqdm(list(title_url_list), desc="Fetching wiki pages"):
+    for title, url in tqdm(list(title_url_list), desc="Fetching wiki pages", disable=verbose is False):
         try:
             data = fetch_wikitext(title, url)
         except Exception as exc:
@@ -105,9 +99,9 @@ def stage1_collect_raw(out_dir: Path, title_url_list: Iterable[List[str, str]] =
 ###############################################################################
 
 
-def stage2_clean(in_dir: Path, out_dir: Path) -> None:
+def stage2_clean(in_dir: Path, out_dir: Path, verbose: bool = True) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    for raw_path in tqdm(list(in_dir.glob("*.raw.wiki")), desc="Cleaning text"):
+    for raw_path in tqdm(list(in_dir.glob("*.raw.wiki")), desc="Cleaning text", disable=verbose is False):
         raw_text = raw_path.read_text()
         clean_text = parse_wikitext(raw_text)
         slug = raw_path.stem.replace(".raw", "")
@@ -119,8 +113,8 @@ def stage2_clean(in_dir: Path, out_dir: Path) -> None:
 ###############################################################################
 
 
-def stage3_tables(in_dir: Path, out_dir: Path, title_url_list: Iterable[List[str, str]] = PLANETS) -> None:
-    for title, url in tqdm(list(title_url_list), desc="Serialising tables"):
+def stage3_tables(in_dir: Path, out_dir: Path, title_url_list: Iterable[List[str, str]] = PLANETS, verbose: bool = True) -> None:
+    for title, url in tqdm(list(title_url_list), desc="Serialising tables", disable=verbose is False):
         slug = re.sub(r"[() ]", "_", title.lower())
         cleaned_path = out_dir / f"{slug}.clean.txt"
         if not cleaned_path.exists():
@@ -139,9 +133,9 @@ def stage3_tables(in_dir: Path, out_dir: Path, title_url_list: Iterable[List[str
 ###############################################################################
 
 
-def stage4_chunk(in_dir: Path, out_dir: Path) -> None:
+def stage4_chunk(in_dir: Path, out_dir: Path, verbose: bool = True) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    for cleaned_path in tqdm(list(in_dir.glob("*.clean.txt")), desc="Chunking"):
+    for cleaned_path in tqdm(list(in_dir.glob("*.clean.txt")), desc="Chunking", disable=verbose is False):
         planet_slug = cleaned_path.stem.replace(".clean", "")
         full_text = cleaned_path.read_text()
         sections = split_into_sections(full_text)
@@ -161,16 +155,16 @@ def stage4_chunk(in_dir: Path, out_dir: Path) -> None:
 ###############################################################################
 
 
-def stage5_vectorise(chunks_dir: Path, index_dir: Path, model_name: str = DEFAULT_EMBEDDING_MODEL) -> None:
+def stage5_vectorise(chunks_dir: Path, index_dir: Path, model_name: str = EMBED_MODEL, verbose: bool = True) -> None:
     if SentenceTransformer is None:
         raise RuntimeError("sentence-transformers not installed")
     if faiss is None:
         raise RuntimeError("faiss-cpu not installed")
 
     index_dir.mkdir(parents=True, exist_ok=True)
-    model = SentenceTransformer(model_name, device="cpu")
+    model = SentenceTransformer(model_name, device="cuda")
 
-    for chunks_path in tqdm(list(chunks_dir.glob("*.chunks.jsonl")), desc="Embedding + FAISS"):
+    for chunks_path in tqdm(list(chunks_dir.glob("*.chunks.jsonl")), desc="Embedding + FAISS", disable=verbose is False):
         planet_slug = chunks_path.stem.replace(".chunks", "")
         texts: List[str] = []
         metadatas: List[Dict[str, Any]] = []
@@ -200,7 +194,20 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Build Wikipedia planet corpus (stages 1-5)")
-    parser.add_argument("out", type=Path, help="Output directory for artefacts")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        help="Output directory for artefacts",
+        default=Path("./wiki")
+    )
+    parser.add_argument(
+        '-v',
+        '--verbose',
+        dest="verbose",
+        action = 'append_const',
+        const = 1,
+        help="Enable verbose output (tqdm progress bars)",
+    )
     parser.add_argument(
         "--skip",
         nargs="*",
@@ -210,7 +217,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model",
-        default=DEFAULT_EMBEDDING_MODEL,
+        default=EMBED_MODEL,
         help="HF sentence-transformers model for embeddings",
     )
 
@@ -222,14 +229,14 @@ if __name__ == "__main__":
     index_dir = args.out / "faiss"
 
     if "stage1" not in args.skip:
-        stage1_collect_raw(raw_dir, title_url_list=PLANETS)
+        stage1_collect_raw(raw_dir, title_url_list=SOLAR_SYSTEM_PAGES, verbose=args.verbose)
     if "stage2" not in args.skip:
-        stage2_clean(raw_dir, clean_dir)
+        stage2_clean(raw_dir, clean_dir, verbose=args.verbose)
     if "stage3" not in args.skip:
-        stage3_tables(raw_dir, clean_dir)
+        stage3_tables(raw_dir, clean_dir, verbose=args.verbose)
     if "stage4" not in args.skip:
-        stage4_chunk(clean_dir, chunks_dir)
+        stage4_chunk(clean_dir, chunks_dir, verbose=args.verbose)
     if "stage5" not in args.skip:
-        stage5_vectorise(chunks_dir, index_dir, model_name=args.model)
+        stage5_vectorise(chunks_dir, index_dir, model_name=args.model, verbose=args.verbose)
 
     print("✔️  Pipeline finished. Outputs in", args.out)

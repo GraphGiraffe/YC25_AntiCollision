@@ -1,6 +1,6 @@
 ## `README.md`
 
-> **OSS RAG prototype** – fact-checking about the Solar-System planets
+> **OSS RAG prototype** – fact-checking about the Solar-System objects
 > Open-source only • Python 3.11 • Conda + pip hybrid environment
 
 ---
@@ -13,7 +13,7 @@ git clone https://github.com/you/ycrag.git && cd ycrag
 
 # create the conda environment from the lock file
 conda env create -f env.yml
-conda activate ycrag
+conda activate ac
 ```
 
 If you do **not** plan to use a GPU, you can already run the whole pipeline (it will use CPU-only *llama-cpp-python*).
@@ -44,7 +44,7 @@ PY
 ## 2 · Build the local Wikipedia corpus (stages 1-5)
 
 ```bash
-python build_wiki_dataset.py ./wiki         # ≈ 1-2 min on a laptop
+python build_wiki_dataset.py        # ≈ 4-5 min
 ```
 
 *Output tree*
@@ -54,7 +54,7 @@ wiki/
  ├─ raw/       *.raw.wiki + *.meta.json
  ├─ clean/     *.clean.txt             (after parsing)
  ├─ chunks/    *.chunks.jsonl          (300-token windows)
- └─ faiss/     *.faiss + *.meta.json   (per-planet indexes)
+ └─ faiss/     *.faiss + *.meta.json   (per-object indexes)
 ```
 
 ---
@@ -62,17 +62,8 @@ wiki/
 ## 3 · Run an interactive test (stages 6-10)
 
 ```bash
-python main_demo.py
-# → answers five sample questions from query_utils.py
-```
-
-Or ask your own:
-
-```python
-from pathlib import Path
-from main_demo import ask        # tiny helper around the full pipeline
-
-ask("How long does it take for Saturn to orbit the Sun?")
+python test_answer_generation.py
+# → answers five sample questions from text_dicts.py
 ```
 
 The assistant returns a **strict JSON** object:
@@ -93,8 +84,8 @@ The assistant returns a **strict JSON** object:
 | Component      | Default                  | Possible swap                                          | Effect                          |
 | -------------- | ------------------------ | ------------------------------------------------------ | ------------------------------- |
 | **Embeddings** | `BAAI/bge-large-en-v1.5` | `bge-base-en`                                          | –25 % RAM / faster index build  |
-| **Reranker**   | Chat LLM (*TinyLlama*)   | Cross-encoder `BAAI/bge-reranker-base`                 | ×10 faster, no generation flags |
-| **Answer LLM** | `Mistral-7B Q4_K_M`      | GPU layers (`n_gpu_layers=35`) or `phi-3-mini` (3.8 B) | 5 → 25 tok/s                    |
+| **Reranker**   | Chat LLM (*TinyLlama*)   | Cross-encoder `BAAI/bge-reranker-v2-m3`                | ×10 faster, no generation flags |
+| **Answer LLM** | `Mistral-7B Q3_K_M`      | GPU layers (`n_gpu_layers=35`) or `phi-3-mini` (3.8 B) | 5 → 25 tok/s                    |
 | **Context**    | 10 pages, 3 650 tok      | keep last 1 024 tok (`KEEP_CTX_TOKENS`)                | −70 % prompt-eval time          |
 
 ---

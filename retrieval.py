@@ -60,12 +60,13 @@ def retrieve_candidates(
     chunks_dir: Path,
     top_k: int = 30,
     model_name: str = DEFAULT_EMBED_MODEL,
+    verbose: bool = True,
 ) -> List[Dict[str, Any]]:
     model = _get_embedder(model_name)          # ← берём «живой» объект из кэша
     q_emb = model.encode([query], normalize_embeddings=True).astype("float32")
 
     all_hits: List[Dict[str, Any]] = []
-    for idx_path in tqdm(index_paths, desc="FAISS search"):
+    for idx_path in tqdm(index_paths, desc="FAISS search", disable=verbose is False):
         slug = idx_path.stem  # mercury_(planet)
         index = faiss.read_index(str(idx_path))
         D, I = index.search(q_emb, top_k)  # (1, k)

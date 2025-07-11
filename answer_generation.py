@@ -74,7 +74,7 @@ try:
 except ImportError:
     _enc = None  # fallback → будем считать «token = word»
 
-KEEP_CTX_TOKENS = 1024        # максимум токенов, которые передадим модели
+KEEP_CTX_TOKENS = 2048        # максимум токенов, которые передадим модели
 # ---------------------------------------------------------------------------
 
 
@@ -114,13 +114,13 @@ def build_context(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-def _download_best_gguf(repo_id: str) -> Path:
+def _download_best_gguf(repo_id: str, gguf_quantization: List[str] = _GGUF_PREFERRED) -> Path:
     if hf_hub_download is None or list_repo_files is None:
         raise RuntimeError("huggingface-hub не установлен")
 
     files = list_repo_files(repo_id)
     # ищем «предпочтительный» файл
-    for pat in _GGUF_PREFERRED:
+    for pat in gguf_quantization:
         match = next((f for f in files if f.endswith(pat)), None)
         if match:
             break
@@ -135,7 +135,7 @@ def _download_best_gguf(repo_id: str) -> Path:
     return Path(local_path)
 
 
-def _load_llm(model_ref: str | Path, max_ctx=4096, max_tok=512):
+def _load_llm(model_ref: str | Path, max_ctx=4096, max_tok=512, gguf_quantization: List[str] = _GGUF_PREFERRED, verbose: bool = False):
     """
     Выбирает backend:
       • .gguf → llama.cpp
@@ -150,13 +150,14 @@ def _load_llm(model_ref: str | Path, max_ctx=4096, max_tok=512):
             raise RuntimeError("llama-cpp-python не установлен")
 
         if str(model_ref).endswith("-GGUF"):
-            model_ref = _download_best_gguf(str(model_ref))  # repo_id → Path
+            model_ref = _download_best_gguf(str(model_ref), gguf_quantization)  # repo_id → Path
 
         return Llama(
             model_path=str(model_ref),
             n_ctx=max_ctx,
             n_threads=4,
-            n_gpu_layers=25,  # измените, если собрали CUDA/Metal
+            n_gpu_layers=35,  # измените, если собрали CUDA/Metal
+            verbose=verbose
         )
 
     # ---------------- transformers branch --------------
@@ -171,6 +172,7 @@ def _load_llm(model_ref: str | Path, max_ctx=4096, max_tok=512):
         tokenizer=tok,
         max_new_tokens=max_tok,
         do_sample=False,
+        verbose=False,
     )
 
 
@@ -211,9 +213,9 @@ def _safe_json_extract(raw: str) -> Dict[str, Any]:
 
 
 @lru_cache(maxsize=1)
-def _get_answer_llm(model_ref: str | Path, max_ctx=4096, max_tok=512):
+def _get_answer_llm(model_ref: str | Path, max_ctx=4096, max_tok=512, gguf_quantization: List[str] = _GGUF_PREFERRED, verbose=False):
     """Единоразово загружает Llama или transformers-pipeline."""
-    return _load_llm(model_ref, max_ctx=max_ctx, max_tok=max_tok)
+    return _load_llm(model_ref, max_ctx=max_ctx, max_tok=max_tok, gguf_quantization=gguf_quantization, verbose=verbose)
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -224,19 +226,23 @@ def generate_answer(
     model_ref: str | Path = DEFAULT_GGUF_REPO,
     top_n_ctx: int = 10,
     max_new_tokens: int = 512,
+    gguf_quantization: List[str] = _GGUF_PREFERRED,
+    verbose: int = False,
 ) -> Dict[str, Any]:
     ctx, _ = build_context(ranked_chunks, top_n=top_n_ctx)
     prompt = build_final_prompt(ctx, query)
 
-    llm = _get_answer_llm(model_ref, max_ctx=4096, max_tok=max_new_tokens)
+    llm = _get_answer_llm(model_ref, max_ctx=4096, max_tok=max_new_tokens, gguf_quantization=gguf_quantization, verbose=verbose)
 
-    if isinstance(llm, Llama):                           # llama.cpp путь
+    if isinstance(llm, Llama):
+        # llama.cpp путь
         out = llm(prompt, max_tokens=max_new_tokens, temperature=0)["choices"][0]["text"]
     else:                                                # transformers.pipeline
         out = llm(prompt)[0]["generated_text"]
 
     result = _safe_json_extract(out)
-    result['prompt'] = prompt  # для отладки
+    if verbose > 1:
+        result['prompt'] = prompt  # для отладки
     for k in ("step_by_step_analysis", "reasoning_summary", "citations", "final_answer"):
         result.setdefault(k, "" if k != "citations" else [])
     return result
@@ -260,5 +266,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ranked = pickle.loads(args.ranked_pickle.read_bytes())
-    ans = generate_answer(args.query, ranked, model_ref=args.model)
+    ans = generate_answer(args.query, ranked, model_ref=args.model, gguf_quantization=_GGUF_PREFERRED)
     print(json.dumps(ans, indent=2, ensure_ascii=False))
