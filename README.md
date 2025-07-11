@@ -161,12 +161,12 @@ Response is **strict JSON**:
 
 ## 4 · Performance knobs
 
-│ Layer          │ Default                    │ Swap to                          │ Effect                      │
-│ -------------- │ -------------------------- │ -------------------------------- │ --------------------------- │
-│ **Embeddings** │ `bge-base-en-v1.5` (768 d) │ `bge-large`                      │ +1 pp nDCG, ×1.4 RAM        │
-│ **Reranker**   │ `bge-reranker-base`        │ `bge-reranker-large`             │ +2 pp nDCG, needs 3 GB VRAM │
-│ **Answer LLM** │ `Mistral-7B Q4_K_M` GGUF   │ GPU layers 35 or `phi-3-mini-4k` │ 5 tok/s → 25 tok/s          │
-│ **Prompt**     │ 10 pages → 3 600 tok       │ `KEEP_CTX_TOKENS = 1_024`        │ –70 % prompt-eval time      │
+| Layer          | Default                    | Swap to                          | Effect                      |
+| -------------- | -------------------------- | -------------------------------- | --------------------------- |
+| **Embeddings** | `bge-base-en-v1.5` (768 d) | `bge-large`                      | +1 pp nDCG, ×1.4 RAM        |
+| **Reranker**   | `bge-reranker-base`        | `bge-reranker-large`             | +2 pp nDCG, needs 3 GB VRAM |
+| **Answer LLM** | `Mistral-7B Q4_K_M` GGUF   | GPU layers 35 or `phi-3-mini-4k` | 5 tok/s → 25 tok/s          |
+| **Prompt**     | 10 pages → 3 600 tok       | `KEEP_CTX_TOKENS = 1_024`        | –70 % prompt-eval time      |
 
 Tune mixing weight in `rerank_utils.py`: `_ALPHA = 0.3`
 (0 = CE-only, 1 = vector-only).
