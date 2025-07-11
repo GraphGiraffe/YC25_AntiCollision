@@ -8,6 +8,62 @@
 > rerank • `llama.cpp`/Transformers for answer-LLM
 
 ---
+### RAG Scheme
+
+```
+──────────────────────────────  build database  ─────────────────────────────
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                    INGESTION  (stages 1-5, offline)                     │
+  │                                                                         │
+  │  Wikipedia pages  →  clean & chunk  →  BGE embeddings  →  FAISS index   │
+  │                                                                         │
+  │  (see: build_wiki_dataset.py → wiki/{raw│clean│chunks│faiss})           │
+  └─────────────────────────────────────────────────────────────────────────┘
+
+
+────────────────────────────────  llm usage  ────────────────────────────────
+
+┌──────────┐  ───route───►  ┌──────────────────┐         ┌───────────────┐
+│ Question │────────┬──────►│  Index selector  │────────►│  FAISS search │──┐
+└──────────┘        │       │  (routing_utils) │         │  (top-K = 30) │  │
+                    │       └──────────────────┘         └───────────────┘  │
+                    │                       selected *.faiss                │
+                    │                                                       │
+                    │                   pairs                               │
+                    │            ┌──────────────────┐                       │
+                    │            │ Cross-Encoder CE │◄──────────────────────┘
+                    │            │  (rerank_utils)  │   vec-score α + CE 1-α 
+                    │            └────────┬─────────┘                        
+                    │                     │ top-10 chunks                    
+                    │                     ▼                                  
+                    │         ┌────────────────────────┐                     
+                    │         │    build_context()     │                     
+                    │         │  <<PAGE n>> markers    │                     
+                    │         └───────────┬────────────┘                     
+                    │                     │ ctx (prompt string)              
+                    │                     ▼                                  
+                    │         ┌────────────────────────┐                     
+                    │         │    Prompt template     │                     
+                    └────────►│ JSON-schema + ctx + Q  │                     
+                              │   (prompts.py)         │                     
+                              └───────────┬────────────┘                     
+                                          │ final prompt                     
+                                          ▼                                  
+                              ┌────────────────────────┐                     
+                              │  Answer-LLM            │                     
+                              │  llama.cpp  (GGUF)     │                     
+                              └───────────┬────────────┘                     
+                                          │ JSON output                      
+                                          ▼                                  
+                                  ┌──────────────┐                           
+                                  │   Answer     │                           
+                                  │ (strict JSON)│                           
+                                  └──────────────┘                           
+
+```
+---
+
 ### Pipeline overview
 
 | #      | Stage                        | What happens                                                                                                                                                                                           | Why                                                                    | \*\*Tools used in **this repo**                                         |
@@ -24,6 +80,7 @@
 | **9**  | Context build                | Take top-10 chunks, prefix with `<<PAGE n>>`; trim to ≤2048 tokens                                                                                                                                     | Fits into 4 k ctx; page tags enable citations                          | `answer_generation.build_context()`                                     |
 | **10** | Answer generation            | Prompt = system + JSON-schema + context + question → **`Mistral-7B` GGUF** via `llama.cpp` → strict JSON: `step_by_step_analysis`, `reasoning_summary`, `citations`, `final_answer` (“N/A” if no fact) | CoT + structured output = minimal hallucinations, easy post-processing | `answer_generation.generate_answer()` (Transformers **or** `llama.cpp`) |
 
+*(Stages 11-12 from the original checklist—CLI wrappers & evaluation—are not yet implemented in this fork, but hooks are ready in `test_*` scripts.)*
 
 ---
 
@@ -75,7 +132,7 @@ PY
 
 ```bash
 python build_wiki_dataset.py          # ≈ 4-5 min on laptop
-# artefacts land in ./wiki/{raw|clean|chunks|faiss}
+# artefacts land in ./wiki/{raw│clean│chunks│faiss}
 ```
 
 *Pages taken from* `text_dicts.SOLAR_SYSTEM_PAGES` – 50 articles incl. planets,
@@ -104,12 +161,12 @@ Response is **strict JSON**:
 
 ## 4 · Performance knobs
 
-| Layer          | Default                    | Swap to                          | Effect                      |
-| -------------- | -------------------------- | -------------------------------- | --------------------------- |
-| **Embeddings** | `bge-base-en-v1.5` (768 d) | `bge-large`                      | +1 pp nDCG, ×1.4 RAM        |
-| **Reranker**   | `bge-reranker-base`        | `bge-reranker-large`             | +2 pp nDCG, needs 3 GB VRAM |
-| **Answer LLM** | `Mistral-7B Q4_K_M` GGUF   | GPU layers 35 or `phi-3-mini-4k` | 5 tok/s → 25 tok/s          |
-| **Prompt**     | 10 pages → 3 600 tok       | `KEEP_CTX_TOKENS = 1_024`        | –70 % prompt-eval time      |
+│ Layer          │ Default                    │ Swap to                          │ Effect                      │
+│ -------------- │ -------------------------- │ -------------------------------- │ --------------------------- │
+│ **Embeddings** │ `bge-base-en-v1.5` (768 d) │ `bge-large`                      │ +1 pp nDCG, ×1.4 RAM        │
+│ **Reranker**   │ `bge-reranker-base`        │ `bge-reranker-large`             │ +2 pp nDCG, needs 3 GB VRAM │
+│ **Answer LLM** │ `Mistral-7B Q4_K_M` GGUF   │ GPU layers 35 or `phi-3-mini-4k` │ 5 tok/s → 25 tok/s          │
+│ **Prompt**     │ 10 pages → 3 600 tok       │ `KEEP_CTX_TOKENS = 1_024`        │ –70 % prompt-eval time      │
 
 Tune mixing weight in `rerank_utils.py`: `_ALPHA = 0.3`
 (0 = CE-only, 1 = vector-only).
