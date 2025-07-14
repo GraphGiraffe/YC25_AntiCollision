@@ -50,3 +50,46 @@ def build_final_prompt(context: str, question: str) -> str:
             "Remember: output ONLY the JSON object and nothing else.",
         ]
     )
+
+SYSTEM_PROMPT_CONTRA = dedent("""
+You are a fact-checker. Decide whether the CLAIM contradicts, is supported by,
+or is unrelated to the EVIDENCE passages. Think step-by-step but output ONLY a
+JSON with the schema:
+{
+  "status": "contradict" | "support" | "neutral",
+  "reason": "<short explanation>"
+}
+""").strip()
+
+def build_contradiction_prompt(claim: str, evidence: str) -> str:
+    return "\n\n".join([
+        SYSTEM_PROMPT_CONTRA,
+        "----- CLAIM -----",
+        claim.strip(),
+        "----- EVIDENCE -----",
+        evidence.strip(),
+        "",
+        "Remember: valid JSON, nothing else."
+    ])
+
+
+SYSTEM_PROMPT_INNER_CONTRA = dedent("""
+You are a contradiction-detector. Decide whether SENTENCE_A contradicts
+SENTENCE_B.  Output ONLY valid JSON:
+{
+  "status": "contradict" | "support" | "neutral",
+  "reason": "<short explanation>"
+}
+""").strip()
+
+def build_pair_prompt(sent_a: str, sent_b: str) -> str:
+    """Create a prompt for two sentences."""
+    return "\n\n".join([
+        SYSTEM_PROMPT_INNER_CONTRA,
+        "----- SENTENCE_A -----",
+        sent_a.strip(),
+        "----- SENTENCE_B -----",
+        sent_b.strip(),
+        "",
+        "Remember: JSON only."
+    ])

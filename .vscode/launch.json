@@ -39,6 +39,22 @@
             "request": "launch",
             "program": "test_rerank.py",
             "console": "integratedTerminal"
+        },
+        {
+            "name": "contradiction_mining.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "contradiction_mining.py",
+            "args": ["bkp/solar_system_school_texts/Earth.txt"],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "contradiction_internal.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "contradiction_internal.py",
+            "args": ["bkp/solar_system_school_texts/Earth.txt"],
+            "console": "integratedTerminal"
         }
     ]
 }
