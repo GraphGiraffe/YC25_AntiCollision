@@ -82,7 +82,7 @@ TOKEN_OVERLAP = 50
 
 def stage1_collect_raw(out_dir: Path, title_url_list: Iterable[List[str, str]] = PLANETS, verbose: bool = True) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    for title, url in tqdm(list(title_url_list), desc="Fetching wiki pages", disable=verbose is False):
+    for title, url in tqdm(list(title_url_list), desc="Fetching wiki pages", disable=verbose == False):
         try:
             data = fetch_wikitext(title, url)
         except Exception as exc:
@@ -101,7 +101,7 @@ def stage1_collect_raw(out_dir: Path, title_url_list: Iterable[List[str, str]] =
 
 def stage2_clean(in_dir: Path, out_dir: Path, verbose: bool = True) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    for raw_path in tqdm(list(in_dir.glob("*.raw.wiki")), desc="Cleaning text", disable=verbose is False):
+    for raw_path in tqdm(list(in_dir.glob("*.raw.wiki")), desc="Cleaning text", disable=verbose == False):
         raw_text = raw_path.read_text()
         clean_text = parse_wikitext(raw_text)
         slug = raw_path.stem.replace(".raw", "")
@@ -114,7 +114,7 @@ def stage2_clean(in_dir: Path, out_dir: Path, verbose: bool = True) -> None:
 
 
 def stage3_tables(in_dir: Path, out_dir: Path, title_url_list: Iterable[List[str, str]] = PLANETS, verbose: bool = True) -> None:
-    for title, url in tqdm(list(title_url_list), desc="Serialising tables", disable=verbose is False):
+    for title, url in tqdm(list(title_url_list), desc="Serialising tables", disable=verbose == False):
         slug = re.sub(r"[() ]", "_", title.lower())
         cleaned_path = out_dir / f"{slug}.clean.txt"
         if not cleaned_path.exists():
@@ -135,7 +135,7 @@ def stage3_tables(in_dir: Path, out_dir: Path, title_url_list: Iterable[List[str
 
 def stage4_chunk(in_dir: Path, out_dir: Path, verbose: bool = True) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
-    for cleaned_path in tqdm(list(in_dir.glob("*.clean.txt")), desc="Chunking", disable=verbose is False):
+    for cleaned_path in tqdm(list(in_dir.glob("*.clean.txt")), desc="Chunking", disable=verbose == False):
         planet_slug = cleaned_path.stem.replace(".clean", "")
         full_text = cleaned_path.read_text()
         sections = split_into_sections(full_text)
@@ -164,7 +164,7 @@ def stage5_vectorise(chunks_dir: Path, index_dir: Path, model_name: str = EMBED_
     index_dir.mkdir(parents=True, exist_ok=True)
     model = SentenceTransformer(model_name, device="cuda")
 
-    for chunks_path in tqdm(list(chunks_dir.glob("*.chunks.jsonl")), desc="Embedding + FAISS", disable=verbose is False):
+    for chunks_path in tqdm(list(chunks_dir.glob("*.chunks.jsonl")), desc="Embedding + FAISS", disable=verbose == False):
         planet_slug = chunks_path.stem.replace(".chunks", "")
         texts: List[str] = []
         metadatas: List[Dict[str, Any]] = []

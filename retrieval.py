@@ -66,7 +66,7 @@ def retrieve_candidates(
     q_emb = model.encode([query], normalize_embeddings=True).astype("float32")
 
     all_hits: List[Dict[str, Any]] = []
-    for idx_path in tqdm(index_paths, desc="FAISS search", disable=verbose is False):
+    for idx_path in tqdm(index_paths, desc="FAISS search", disable=verbose == False):
         slug = idx_path.stem  # mercury_(planet)
         index = faiss.read_index(str(idx_path))
         D, I = index.search(q_emb, top_k)  # (1, k)

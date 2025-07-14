@@ -45,7 +45,7 @@ def test(question: str, verbose: int = 0) -> None:
     ranked = rerank_candidates(question, candidates, model_name=RERANK_MODEL)
 
     # 9-10. context → answer
-    answer = generate_answer(question, ranked, model_ref=ANSWER_MODEL, gguf_quantization=tuple(GGUF_PREFERRED), verbose=verbose)
+    answer = generate_answer(question, ranked, max_new_tokens=512, model_ref=ANSWER_MODEL, gguf_quantization=tuple(GGUF_PREFERRED), verbose=verbose)
 
     print(json.dumps(answer, indent=2, ensure_ascii=False))
 
